@@ -70,9 +70,10 @@ body{font-family:'Segoe UI',Tahoma,Verdana,sans-serif;background:#f8fafc}
       <thead class="bg-slate-100 text-slate-600 font-bold border-b border-slate-200">
         <tr>
           <th class="p-3">MÃ KH</th><th class="p-3 text-right">Đợt 1</th><th class="p-3 text-right">Đợt 2</th>
-          <th class="p-3 text-right">Đợt 3</th><th class="p-3 text-right">Chưa phân đợt</th>
-          <th class="p-3 text-right">Tổng dòng</th><th class="p-3 text-right">Tổng Cont 20'</th>
-          <th class="p-3 text-right">Tổng Cont 40'</th><th class="p-3 text-right">Tổng tiền (VNĐ)</th>
+          <th class="p-3 text-right">Đợt 3</th>
+          <th class="p-3 text-right bg-blue-100 text-blue-800">Tổng Cont 20'</th>
+          <th class="p-3 text-right bg-blue-100 text-blue-800">Tổng Cont 40'</th>
+          <th class="p-3 text-right">Tổng tiền (VNĐ)</th>
         </tr>
       </thead>
       <tbody id="summaryBody" class="divide-y divide-slate-100"></tbody>
@@ -264,18 +265,16 @@ function renderSummary(){
     b1:list.filter(r=>r.batch==='1').length,
     b2:list.filter(r=>r.batch==='2').length,
     b3:list.filter(r=>r.batch==='3').length,
-    bu:list.filter(r=>r.batch==='UNASSIGNED').length,
-    n:list.length,
     c20:list.reduce((a,r)=>a+(r.cont20||0),0),
     c40:list.reduce((a,r)=>a+(r.cont40||0),0),
     money:list.reduce((a,r)=>a+r.total,0)
   });
   body.innerHTML=custs.map(c=>{
     const s=rowFor(rows.filter(r=>r.cust===c));
-    return `<tr><td class="p-3 font-bold">${esc(c)}</td><td class="p-3 text-right">${s.b1}</td><td class="p-3 text-right">${s.b2}</td><td class="p-3 text-right">${s.b3}</td><td class="p-3 text-right ${s.bu?'text-orange-600 font-semibold':''}">${s.bu}</td><td class="p-3 text-right font-semibold">${s.n}</td><td class="p-3 text-right">${s.c20}</td><td class="p-3 text-right">${s.c40}</td><td class="p-3 text-right font-bold">${money(s.money)}</td></tr>`;
-  }).join('')||'<tr><td colspan="9" class="p-3 text-center text-slate-400">Chưa có dữ liệu</td></tr>';
+    return `<tr><td class="p-3 font-bold">${esc(c)}</td><td class="p-3 text-right">${s.b1}</td><td class="p-3 text-right">${s.b2}</td><td class="p-3 text-right">${s.b3}</td><td class="p-3 text-right bg-blue-50 text-blue-800 font-extrabold text-sm">${s.c20}</td><td class="p-3 text-right bg-blue-50 text-blue-800 font-extrabold text-sm">${s.c40}</td><td class="p-3 text-right font-bold">${money(s.money)}</td></tr>`;
+  }).join('')||'<tr><td colspan="7" class="p-3 text-center text-slate-400">Chưa có dữ liệu</td></tr>';
   const t=rowFor(rows);
-  foot.innerHTML=`<tr><td class="p-3">TỔNG CỘNG</td><td class="p-3 text-right">${t.b1}</td><td class="p-3 text-right">${t.b2}</td><td class="p-3 text-right">${t.b3}</td><td class="p-3 text-right">${t.bu}</td><td class="p-3 text-right">${t.n}</td><td class="p-3 text-right">${t.c20}</td><td class="p-3 text-right">${t.c40}</td><td class="p-3 text-right">${money(t.money)}</td></tr>`;
+  foot.innerHTML=`<tr><td class="p-3">TỔNG CỘNG</td><td class="p-3 text-right">${t.b1}</td><td class="p-3 text-right">${t.b2}</td><td class="p-3 text-right">${t.b3}</td><td class="p-3 text-right bg-blue-100 text-blue-900 text-base">${t.c20}</td><td class="p-3 text-right bg-blue-100 text-blue-900 text-base">${t.c40}</td><td class="p-3 text-right">${money(t.money)}</td></tr>`;
 }
 function updateKPI(){
   const total=rows.reduce((a,r)=>a+r.total,0);
