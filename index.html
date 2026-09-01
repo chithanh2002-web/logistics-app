@@ -273,9 +273,23 @@ function buildIdx(headers){
     cds:headerIndex(headers,['SỐ TỜ KHAI (CDS)','SỐ TỜ KHAI','SO TO KHAI','CDS NO','CDS','DECLARATION NO']),
     date:headerIndex(headers,['NGÀY TỜ KHAI','NGAY TO KHAI','DECLARATION DATE','CDS DATE','DATE']),
     cargo:headerIndex(headers,['CONT / KGS','CONT/KGS','CARGO','CONTAINER','QTY']),
+    packs:headerIndex(headers,['PACKS','PACK','SỐ KIỆN']),
+    kgs:headerIndex(headers,['KGS','KG','TRỌNG LƯỢNG']),
+    cont20:headerIndex(headers,["CONT 20'","CONT 20","20'"]),
+    cont40:headerIndex(headers,["CONT 40'","CONT 40","40'"]),
     total:headerIndex(headers,['TỔNG TIỀN (VNĐ)','TỔNG TIỀN','TOTAL AMOUNT','GRAND TOTAL','TOTAL','AMOUNT','SERVICE CHARGE']),
     batch:headerIndex(headers,['ĐỢT','DOT','BATCH'])
   };
+}
+function buildCargo(row,idx){
+  const num=i=>{const n=Number(String(row[i]).replace(/,/g,''));return isFinite(n)?n:0};
+  const parts=[];
+  if(idx.cont20>=0 && num(idx.cont20)>0) parts.push(`${num(idx.cont20)} Cont 20'`);
+  if(idx.cont40>=0 && num(idx.cont40)>0) parts.push(`${num(idx.cont40)} Cont 40'`);
+  if(!parts.length && idx.packs>=0 && num(idx.packs)>0) parts.push(`${num(idx.packs)} PACKS`);
+  let s=parts.join(' + ');
+  if(idx.kgs>=0 && num(idx.kgs)>0) s+=(s?' / ':'')+num(idx.kgs).toLocaleString('vi-VN')+' KGS';
+  return s;
 }
 // Nhiều file Statement thật có letterhead công ty / tiêu đề nằm ở các dòng đầu trước khi tới dòng tiêu đề cột thật sự.
 // Quét tối đa 30 dòng đầu, chọn dòng khớp được nhiều trường bắt buộc nhất làm dòng header.
@@ -306,7 +320,7 @@ function mapSheet(data){
     bl:idx.bl>=0?row[idx.bl]:'',
     cds:idx.cds>=0?row[idx.cds]:'',
     date:idx.date>=0?row[idx.date]:'',
-    cargo:idx.cargo>=0?row[idx.cargo]:'',
+    cargo:idx.cargo>=0?row[idx.cargo]:buildCargo(row,idx),
     total:idx.total>=0?row[idx.total]:0,
     batchOverride:idx.batch>=0?row[idx.batch]:''
   },i+1));
