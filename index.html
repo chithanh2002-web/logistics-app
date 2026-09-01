@@ -113,10 +113,10 @@ body{font-family:'Segoe UI',Tahoma,Verdana,sans-serif;background:#f8fafc}
   <div class="overflow-x-auto table-scroll max-h-[600px]">
     <table class="w-full text-left text-xs border-collapse">
       <thead class="bg-slate-100 text-slate-600 sticky top-0 z-10 font-bold border-b border-slate-200">
-        <tr>
+        <tr id="tableHeadRow">
           <th class="p-3">STT</th><th class="p-3">ĐỢT</th><th class="p-3">MÃ KH</th><th class="p-3">MODE</th>
           <th class="p-3">B/L NO.</th><th class="p-3">SỐ TỜ KHAI</th><th class="p-3">NGÀY TỜ KHAI</th>
-          <th class="p-3">CONT / KGS</th><th class="p-3">TỔNG TIỀN (VNĐ)</th><th class="p-3">TRẠNG THÁI</th>
+          <th class="p-3">CONT / KGS</th><th class="p-3">TỔNG TIỀN (VNĐ)</th><th id="thExtraEnd" class="p-3">TRẠNG THÁI</th>
         </tr>
       </thead>
       <tbody id="tableBody" class="divide-y divide-slate-100"></tbody>
@@ -159,7 +159,7 @@ const SAMPLE = [
 ];
 
 let rows = SAMPLE.map((x,i)=>normalizeRow(x,i+1));
-let activeBatch='ALL', fileName='Dữ liệu mẫu';
+let activeBatch='ALL', fileName='Dữ liệu mẫu', extraCols=[];
 
 function norm(s){return String(s??'').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/đ/g,'d').replace(/[^a-z0-9]/g,'');}
 function clean(v){return String(v??'').trim();}
@@ -221,6 +221,7 @@ function normalizeRow(x,no){
     packs:Number(x.packs)||cargoNums.packs,
     kgs:Number(x.kgs)||cargoNums.kgs,
     total:parseMoney(x.total),
+    extra:x.extra||[],
     batch:'UNASSIGNED',status:'OK',errors:[]
   };
   if(!r.cust) r.errors.push('Thiếu mã KH');
@@ -296,6 +297,22 @@ function getFiltered(){
     return batchOk&&custOk&&stOk&&(!q||text.includes(q));
   });
 }
+function fmtExtra(v){
+  if(v===''||v===null||v===undefined)return '';
+  const n=Number(String(v).replace(/,/g,''));
+  if(isFinite(n)&&String(v).trim()!=='')return n.toLocaleString('vi-VN');
+  return esc(clean(v));
+}
+function renderTableHead(){
+  const th=document.getElementById('thExtraEnd');
+  document.querySelectorAll('.th-extra').forEach(x=>x.remove());
+  extraCols.forEach(label=>{
+    const el=document.createElement('th');
+    el.className='p-3 th-extra whitespace-nowrap';
+    el.textContent=clean(label).replace(/\n/g,' ');
+    th.parentNode.insertBefore(el,th);
+  });
+}
 function render(){
   const data=getFiltered(), tbody=document.getElementById('tableBody');
   tbody.innerHTML=data.map(r=>`
@@ -307,6 +324,7 @@ function render(){
     <td class="p-3 font-mono ${r.errors.some(e=>e.includes('tờ khai'))?'text-red-600 font-bold':''}">${esc(r.cds)}</td>
     <td class="p-3 ${r.errors.some(e=>e.includes('ngày'))?'text-red-600 font-bold':''}">${esc(r.date)}</td>
     <td class="p-3">${esc(r.cargo)}</td><td class="p-3 font-bold">${money(r.total)}</td>
+    ${(r.extra||[]).map(e=>`<td class="p-3 whitespace-nowrap">${fmtExtra(e.value)}</td>`).join('')}
     <td class="p-3">${r.status==='WARN'?`<span class="badge bg-red-100 text-red-600" title="${esc(r.errors.join(' | '))}"><i class="fa-solid fa-circle-exclamation"></i>Cần sửa</span>`:`<span class="badge bg-emerald-100 text-emerald-600"><i class="fa-solid fa-circle-check"></i>Hợp lệ</span>`}</td>
   </tr>`).join('');
   document.getElementById('showingCount').textContent=`Hiển thị: ${data.length} / ${rows.length} lô hàng`;
@@ -359,6 +377,7 @@ function findHeaderRow(data){
   }
   return bestScore>=2?bestRow:-1;
 }
+const EXCLUDE_EXTRA=['ĐÁNH DẤU','DANH DAU','KIỂM TRA','KIEM TRA','NO.','NO','STT'];
 function mapSheet(data){
   if(!data.length)return null;
   const headerRow=findHeaderRow(data);
@@ -367,8 +386,11 @@ function mapSheet(data){
   const idx=buildIdx(headers);
   const missing=Object.entries(idx).filter(([k,v])=>v<0&&['cust','bl','cds','date','total'].includes(k)).map(x=>x[0]);
   if(missing.length>=3)return null;
+  const used=new Set([idx.cust,idx.mode,idx.bl,idx.cds,idx.date,idx.cargo,idx.packs,idx.kgs,idx.cont20,idx.cont40,idx.total,idx.batch].filter(i=>i>=0));
+  const excl=EXCLUDE_EXTRA.map(norm);
+  const extraCols=headers.map((h,i)=>({i,label:h})).filter(({i,label})=>!used.has(i)&&label!==''&&!excl.includes(norm(label)));
   const hasCoreField=row=>[idx.cust,idx.bl,idx.cds,idx.date].some(i=>i>=0&&clean(row[i])!=='');
-  return data.slice(headerRow+1).filter(hasCoreField).map((row,i)=>normalizeRow({
+  const mapped=data.slice(headerRow+1).filter(hasCoreField).map((row,i)=>normalizeRow({
     cust:idx.cust>=0?row[idx.cust]:'',
     mode:idx.mode>=0?row[idx.mode]:'',
     bl:idx.bl>=0?row[idx.bl]:'',
@@ -380,8 +402,11 @@ function mapSheet(data){
     packs:idx.packs>=0?row[idx.packs]:0,
     kgs:idx.kgs>=0?row[idx.kgs]:0,
     total:idx.total>=0?row[idx.total]:0,
-    batchOverride:idx.batch>=0?row[idx.batch]:''
+    batchOverride:idx.batch>=0?row[idx.batch]:'',
+    extra:extraCols.map(ec=>({label:ec.label,value:row[ec.i]}))
   },i+1));
+  mapped.extraCols=extraCols.map(ec=>ec.label);
+  return mapped;
 }
 document.getElementById('fileInput').addEventListener('change',async e=>{
   const file=e.target.files[0];if(!file)return;
@@ -394,9 +419,9 @@ document.getElementById('fileInput').addEventListener('change',async e=>{
       if(mapped&&mapped.length>best.length)best=mapped;
     }
     if(!best.length)throw new Error('Không tìm được sheet có cấu trúc Statement phù hợp.');
-    rows=best;fileName=file.name;document.getElementById('fileInfo').textContent=`Đã nạp: ${file.name} — ${best.length} dòng`;
+    rows=best;extraCols=best.extraCols||[];fileName=file.name;document.getElementById('fileInfo').textContent=`Đã nạp: ${file.name} — ${best.length} dòng — ${extraCols.length} cột phí chi tiết`;
     activeBatch='ALL';document.querySelectorAll('.filter').forEach(b=>{b.className='filter bg-slate-100 text-slate-700 text-xs px-3 py-1.5 rounded-lg font-semibold'});document.querySelector('[data-filter="ALL"]').className='filter bg-blue-600 text-white text-xs px-3 py-1.5 rounded-lg font-semibold';
-    recalc();msg(`Đã đọc ${best.length} dòng. Hệ thống đã kiểm tra dữ liệu và đánh dấu các dòng cần sửa.`,'ok');
+    renderTableHead();recalc();msg(`Đã đọc ${best.length} dòng. Hệ thống đã kiểm tra dữ liệu và đánh dấu các dòng cần sửa.`,'ok');
   }catch(err){msg('Không thể nạp file: '+err.message,'error')}
   e.target.value='';
 });
@@ -408,8 +433,10 @@ document.querySelectorAll('.filter').forEach(b=>b.addEventListener('click',()=>{
 ['searchInput','custFilter','statusFilter'].forEach(id=>document.getElementById(id).addEventListener(id==='searchInput'?'input':'change',render));
 
 function sheetFor(name,data){
-  const ws=XLSX.utils.json_to_sheet(data.map(r=>({STT:r.no,'MÃ KH':r.cust,MODE:r.mode,'B/L NO.':r.bl,'SỐ TỜ KHAI':r.cds,'NGÀY TỜ KHAI':r.date,'CONT / KGS':r.cargo,'TỔNG TIỀN (VNĐ)':r.total,'TRẠNG THÁI':r.status,'GHI CHÚ':r.errors.join('; ')})));
-  ws['!cols']=[{wch:6},{wch:12},{wch:10},{wch:24},{wch:18},{wch:15},{wch:25},{wch:18},{wch:14},{wch:45}];
+  const headers=['STT','ĐỢT','MÃ KH','MODE','B/L NO.','SỐ TỜ KHAI','NGÀY TỜ KHAI','CONT / KGS',...extraCols.map(l=>clean(l).replace(/\n/g,' ')),'TỔNG TIỀN (VNĐ)','TRẠNG THÁI','GHI CHÚ'];
+  const aoa=[headers,...data.map(r=>[r.no,batchLabel(r.batch),r.cust,r.mode,r.bl,r.cds,r.date,r.cargo,...(r.extra||[]).map(e=>e.value),r.total,r.status,r.errors.join('; ')])];
+  const ws=XLSX.utils.aoa_to_sheet(aoa);
+  ws['!cols']=headers.map((h,i)=>({wch:i===0?6:i<8?16:h.length>30?45:18}));
   return ws;
 }
 function exportWorkbook(){
@@ -446,7 +473,7 @@ document.getElementById('templateBtn').onclick=()=>{
   const wb=XLSX.utils.book_new(), ws=XLSX.utils.aoa_to_sheet([['MÃ KH','MODE','B/L NO.','SỐ TỜ KHAI','NGÀY TỜ KHAI','CONT / KGS','TỔNG TIỀN (VNĐ)'],['HCM','Sea','ABC123','108456502450','2026-08-03',"1 Cont 40' / 10,000 KGS",1000000]]);
   XLSX.utils.book_append_sheet(wb,ws,'STATEMENT');XLSX.writeFile(wb,'LSA_Excel_Template.xlsx');
 };
-recalc();
+renderTableHead();recalc();
 </script>
 </body>
 </html>
