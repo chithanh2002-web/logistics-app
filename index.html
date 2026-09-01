@@ -61,6 +61,26 @@ body{font-family:'Segoe UI',Tahoma,Verdana,sans-serif;background:#f8fafc}
   </div>
 </div>
 
+<div class="bg-white rounded-2xl border border-slate-200 shadow-sm mb-6 overflow-hidden">
+  <div class="p-4 border-b border-slate-100 bg-slate-50">
+    <h3 class="text-xs font-bold text-slate-700 uppercase tracking-wider"><i class="fa-solid fa-table text-blue-600"></i> Bảng tổng hợp theo KH &amp; Đợt</h3>
+  </div>
+  <div class="overflow-x-auto">
+    <table class="w-full text-left text-xs border-collapse">
+      <thead class="bg-slate-100 text-slate-600 font-bold border-b border-slate-200">
+        <tr>
+          <th class="p-3">MÃ KH</th><th class="p-3 text-right">Đợt 1</th><th class="p-3 text-right">Đợt 2</th>
+          <th class="p-3 text-right">Đợt 3</th><th class="p-3 text-right">Chưa phân đợt</th>
+          <th class="p-3 text-right">Tổng dòng</th><th class="p-3 text-right">Tổng Cont 20'</th>
+          <th class="p-3 text-right">Tổng Cont 40'</th><th class="p-3 text-right">Tổng tiền (VNĐ)</th>
+        </tr>
+      </thead>
+      <tbody id="summaryBody" class="divide-y divide-slate-100"></tbody>
+      <tfoot id="summaryFoot" class="bg-slate-50 font-bold border-t border-slate-200"></tfoot>
+    </table>
+  </div>
+</div>
+
 <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm mb-6">
   <div class="flex flex-col lg:flex-row gap-3 justify-between">
     <div class="flex flex-wrap gap-2 items-center">
@@ -175,7 +195,18 @@ function getBatch(date){
   if(d>=15&&d<=24)return '3';
   return 'UNASSIGNED';
 }
+function parseCargoNumbers(s){
+  s=clean(s);
+  const g=re=>{const m=s.match(re);return m?Number(m[1].replace(/,/g,'')):0};
+  return {
+    cont20:g(/(\d+(?:[.,]\d+)?)\s*Cont\s*20/i),
+    cont40:g(/(\d+(?:[.,]\d+)?)\s*Cont\s*40/i),
+    packs:g(/(\d+(?:[.,]\d+)?)\s*PACKS?/i),
+    kgs:g(/(\d+(?:[.,]\d+)?)\s*KGS/i)
+  };
+}
 function normalizeRow(x,no){
+  const cargoNums=parseCargoNumbers(x.cargo);
   const r={
     no,
     cust:clean(x.cust).toUpperCase(),
@@ -184,6 +215,10 @@ function normalizeRow(x,no){
     cds:clean(x.cds),
     date:excelDate(x.date),
     cargo:clean(x.cargo),
+    cont20:Number(x.cont20)||cargoNums.cont20,
+    cont40:Number(x.cont40)||cargoNums.cont40,
+    packs:Number(x.packs)||cargoNums.packs,
+    kgs:Number(x.kgs)||cargoNums.kgs,
     total:parseMoney(x.total),
     batch:'UNASSIGNED',status:'OK',errors:[]
   };
@@ -221,7 +256,27 @@ function updateCustFilter(){
   sel.innerHTML='<option value="ALL">Tất cả KH</option>'+custs.map(c=>`<option value="${esc(c)}">${esc(c)}</option>`).join('');
   sel.value=custs.includes(cur)?cur:'ALL';
 }
-function recalc(){duplicateErrors();updateCustFilter();updateKPI();render()}
+function recalc(){duplicateErrors();updateCustFilter();updateKPI();renderSummary();render()}
+function renderSummary(){
+  const custs=[...new Set(rows.map(r=>r.cust).filter(Boolean))].sort();
+  const body=document.getElementById('summaryBody'), foot=document.getElementById('summaryFoot');
+  const rowFor=list=>({
+    b1:list.filter(r=>r.batch==='1').length,
+    b2:list.filter(r=>r.batch==='2').length,
+    b3:list.filter(r=>r.batch==='3').length,
+    bu:list.filter(r=>r.batch==='UNASSIGNED').length,
+    n:list.length,
+    c20:list.reduce((a,r)=>a+(r.cont20||0),0),
+    c40:list.reduce((a,r)=>a+(r.cont40||0),0),
+    money:list.reduce((a,r)=>a+r.total,0)
+  });
+  body.innerHTML=custs.map(c=>{
+    const s=rowFor(rows.filter(r=>r.cust===c));
+    return `<tr><td class="p-3 font-bold">${esc(c)}</td><td class="p-3 text-right">${s.b1}</td><td class="p-3 text-right">${s.b2}</td><td class="p-3 text-right">${s.b3}</td><td class="p-3 text-right ${s.bu?'text-orange-600 font-semibold':''}">${s.bu}</td><td class="p-3 text-right font-semibold">${s.n}</td><td class="p-3 text-right">${s.c20}</td><td class="p-3 text-right">${s.c40}</td><td class="p-3 text-right font-bold">${money(s.money)}</td></tr>`;
+  }).join('')||'<tr><td colspan="9" class="p-3 text-center text-slate-400">Chưa có dữ liệu</td></tr>';
+  const t=rowFor(rows);
+  foot.innerHTML=`<tr><td class="p-3">TỔNG CỘNG</td><td class="p-3 text-right">${t.b1}</td><td class="p-3 text-right">${t.b2}</td><td class="p-3 text-right">${t.b3}</td><td class="p-3 text-right">${t.bu}</td><td class="p-3 text-right">${t.n}</td><td class="p-3 text-right">${t.c20}</td><td class="p-3 text-right">${t.c40}</td><td class="p-3 text-right">${money(t.money)}</td></tr>`;
+}
 function updateKPI(){
   const total=rows.reduce((a,r)=>a+r.total,0);
   document.getElementById('kpiRows').textContent=rows.length;
@@ -321,6 +376,10 @@ function mapSheet(data){
     cds:idx.cds>=0?row[idx.cds]:'',
     date:idx.date>=0?row[idx.date]:'',
     cargo:idx.cargo>=0?row[idx.cargo]:buildCargo(row,idx),
+    cont20:idx.cont20>=0?row[idx.cont20]:0,
+    cont40:idx.cont40>=0?row[idx.cont40]:0,
+    packs:idx.packs>=0?row[idx.packs]:0,
+    kgs:idx.kgs>=0?row[idx.kgs]:0,
     total:idx.total>=0?row[idx.total]:0,
     batchOverride:idx.batch>=0?row[idx.batch]:''
   },i+1));
